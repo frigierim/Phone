@@ -2,11 +2,15 @@ package org.fossify.phone.activities
 
 import android.annotation.TargetApi
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.ContactsContract
+import android.util.Log
 import android.view.Menu
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -23,12 +27,14 @@ import org.fossify.phone.dialogs.ExportCallHistoryDialog
 import org.fossify.phone.dialogs.ManageVisibleTabsDialog
 import org.fossify.phone.extensions.config
 import org.fossify.phone.helpers.RecentsHelper
+import org.fossify.phone.models.CallContact
 import org.fossify.phone.models.RecentCall
 import java.util.Locale
 import kotlin.system.exitProcess
 
 class SettingsActivity : SimpleActivity() {
     companion object {
+        private const val WEEKEND_MODE = "weekend_mode"
         private const val CALL_HISTORY_FILE_TYPE = "application/json"
         private val IMPORT_CALL_HISTORY_FILE_TYPES = buildList {
             add("application/json")
@@ -38,6 +44,10 @@ class SettingsActivity : SimpleActivity() {
             }
         }
     }
+
+    private var isWeekendModeOn: Boolean
+        get() = applicationContext.getSharedPrefs().getBoolean(WEEKEND_MODE, false)
+        set(isWeekendModeOn) = applicationContext.getSharedPrefs().edit().putBoolean(WEEKEND_MODE, isWeekendModeOn).apply()
 
     private val binding by viewBinding(ActivitySettingsBinding::inflate)
     private val getContent =
@@ -76,6 +86,7 @@ class SettingsActivity : SimpleActivity() {
         setupCustomizeColors()
         setupUseEnglish()
         setupLanguage()
+        setupWeekendMode()
         setupManageBlockedNumbers()
         setupManageSpeedDial()
         setupChangeDateTimeFormat()
@@ -148,6 +159,66 @@ class SettingsActivity : SimpleActivity() {
             settingsLanguageHolder.setOnClickListener {
                 launchChangeAppLanguageIntent()
             }
+        }
+    }
+
+    private fun getWorkContacts(callback: (ArrayList<String>) -> Unit) {
+        val privateCursor = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
+        val contactNumbers : ArrayList<String> = ArrayList<String>()
+
+        ContactsHelper(this).getContacts(getAll = true, showOnlyContactsWithNumbers = true)
+        { contacts ->
+
+            val privateContacts = MyContactsContentProvider.getContacts(this, privateCursor)
+
+            if (privateContacts.isNotEmpty()) {
+                contacts.addAll(privateContacts)
+            }
+
+
+            contacts.forEach { pc ->
+                pc.phoneNumbers.forEach {
+                    pn ->
+                        if (pn.type == ContactsContract.CommonDataKinds.Phone.TYPE_WORK) {
+                            contactNumbers.add(pn.normalizedNumber)
+                        }
+                }
+            }
+
+            callback(contactNumbers)
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.N)
+    private fun setupWeekendMode() {
+        binding.apply {
+            settingsWeekendMode.isChecked = isWeekendModeOn
+            settingsWeekendModeHolder.setOnClickListener {
+                settingsWeekendMode.toggle()
+                isWeekendModeOn = settingsWeekendMode.isChecked
+                ensureBackgroundThread {
+                        getWorkContacts() { workContacts ->
+                            workContacts.forEach { number ->
+                                Log.i(null, "Processing $number")
+                                if (isWeekendModeOn) {
+                                    if (!applicationContext.addBlockedNumber(number)) {
+                                        toast("Error blocking $number")
+                                    }
+
+                                } else {
+                                    if (!applicationContext.deleteBlockedNumber(number)) {
+                                        toast("Error unblocking $number")
+                                    }
+                                }
+                            }
+                            if (isWeekendModeOn) {
+                                toast("Blocking work numbers")
+                            } else {
+                                toast("Unblocking work numbers")
+                            }
+                        }
+                    }
+                }
         }
     }
 

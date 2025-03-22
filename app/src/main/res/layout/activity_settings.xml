@@ -117,6 +117,21 @@
             </RelativeLayout>
 
             <RelativeLayout
+                android:id="@+id/settings_weekend_mode_holder"
+                style="@style/SettingsHolderSwitchStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyMaterialSwitch
+                    android:id="@+id/settings_weekend_mode"
+                    style="@style/SettingsSwitchStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/weekend_mode" />
+
+            </RelativeLayout>
+
+            <RelativeLayout
                 android:id="@+id/settings_manage_blocked_numbers_holder"
                 style="@style/SettingsHolderTextViewOneLinerStyle"
                 android:layout_width="match_parent"
